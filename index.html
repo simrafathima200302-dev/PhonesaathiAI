@@ -1,0 +1,559 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PhoneSaathi AI — Voice-first phone helper</title>
+<style>
+:root{--green:#146c52;--mint:#e8f5ef;--ink:#18332b;--muted:#64756f;--line:#dce8e2;--white:#fff}
+*{box-sizing:border-box}body{margin:0;background:#f4f8f6;color:var(--ink);font-family:Arial, sans-serif}
+main{max-width:760px;margin:0 auto;padding:20px 16px 40px}
+header{display:flex;align-items:center;gap:12px;margin:8px 0 22px}.logo{width:48px;height:48px;border-radius:15px;background:var(--green);color:white;display:grid;place-items:center;font-size:25px}
+h1{font-size:24px;margin:0}header p{margin:5px 0 0;color:var(--muted);font-size:14px}
+.panel{background:white;border:1px solid var(--line);border-radius:22px;padding:20px;margin:14px 0;box-shadow:0 8px 28px #173c2c0a}
+label{display:block;font-weight:700;margin-bottom:8px}.language{width:100%;padding:13px;border:1px solid var(--line);border-radius:12px;font-size:16px;background:white;color:var(--ink)}
+.hero{text-align:center;padding:24px 16px}.mic{width:112px;height:112px;border:0;border-radius:50%;background:var(--green);color:white;font-size:42px;cursor:pointer;box-shadow:0 0 0 12px var(--mint);margin:18px 0}
+.mic.listening{background:#b93838;box-shadow:0 0 0 12px #fae9e9}.hint{color:var(--muted);font-size:14px;line-height:1.5}
+.transcript{min-height:48px;background:#f7faf8;border:1px solid var(--line);border-radius:12px;padding:13px;margin-top:14px;line-height:1.5}
+textarea{width:100%;min-height:86px;border:1px solid var(--line);border-radius:12px;padding:12px;font:inherit;resize:vertical}
+button.secondary{border:1px solid var(--line);background:white;color:var(--ink);border-radius:12px;padding:12px 15px;font-size:15px;cursor:pointer}
+button.primary{border:0;background:var(--green);color:white;border-radius:12px;padding:12px 15px;font-size:15px;cursor:pointer}
+.actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:10px}.response{background:var(--mint);border-radius:14px;padding:15px;line-height:1.6;margin-top:14px;white-space:pre-wrap}
+.small{font-size:12px;color:var(--muted);line-height:1.5}.featuregrid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}.feature{background:#f7faf8;border:1px solid var(--line);padding:12px;border-radius:14px;font-size:14px}
+footer{text-align:center;color:var(--muted);font-size:12px;margin-top:22px}
+@media(max-width:520px){.featuregrid{grid-template-columns:1fr}.panel{padding:16px}.mic{width:96px;height:96px}}
+
+/* --- added for MVP features --- */
+.callbtn{display:inline-block;background:#146c52;color:#fff;text-decoration:none;border-radius:14px;padding:16px 22px;font-size:20px;font-weight:700}
+.alertbox{display:none;background:#fff4d6;border:2px solid #e0a800;border-radius:14px;padding:16px;margin-top:14px;font-size:20px;font-weight:700}
+.alertbox.show{display:block}.alertbox button{margin-top:10px;font-size:15px}
+.list{list-style:none;margin:10px 0 0;padding:0}
+.list li{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:10px 12px;border:1px solid var(--line);border-radius:12px;margin-top:8px;background:#f7faf8;font-size:15px}
+.list li.done{opacity:.55}.list li button{border:0;background:transparent;font-size:18px;cursor:pointer}
+.row{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+.row input,.row select{flex:1 1 140px;padding:11px;border:1px solid var(--line);border-radius:12px;font:inherit;background:white;color:var(--ink)}
+button.feature{text-align:left;cursor:pointer;font:inherit;font-size:14px;color:var(--ink)}
+.note{color:#8a5a00;font-size:13px;margin:8px 0 0}
+</style>
+</head>
+<body>
+<main>
+<header><div class="logo">🎙</div><div><h1>PhoneSaathi AI</h1><p>Your phone helper. Just speak in your language.</p></div></header>
+
+<section class="panel">
+<label for="language">Choose your language / భాష / भाषा</label>
+<select id="language" class="language">
+<option value="te-IN">తెలుగు (Telugu)</option>
+<option value="hi-IN">हिन्दी (Hindi)</option>
+<option value="en-IN">English</option>
+</select>
+<p class="note" id="voiceNote"></p>
+</section>
+
+<section class="panel hero">
+<p><strong id="sayTitle">Tap the microphone and speak</strong></p>
+<button id="mic" class="mic" aria-label="Start speaking">🎤</button>
+<p class="hint" id="micHint">Speak naturally. Tap again to stop.</p>
+<div class="transcript" id="transcript">Your spoken words will appear here.</div>
+</section>
+
+<section class="panel">
+<label for="typed">Or type a command to test</label>
+<textarea id="typed" placeholder="Try: remind me to drink water"></textarea>
+<div class="actions">
+<button class="primary" id="run">Run command</button>
+<button class="secondary" id="clear">Clear</button>
+</div>
+<div id="response" class="response" aria-live="polite">PhoneSaathi is ready.</div>
+<div id="actions" class="actions"></div>
+<div id="alertBox" class="alertbox" role="alert"><span id="alertText"></span><br><button class="primary" id="alertOk">OK</button></div>
+<div class="actions"><button class="secondary" id="repeat">🔊 Repeat</button></div>
+</section>
+
+<section class="panel">
+<h3>Tap a demo command</h3>
+<div class="featuregrid" id="demoGrid"></div>
+<p class="small">Demo prototype: reminders are saved in this browser and ring while this page is open. Calls open your phone dialer only after you tap the Call button. No WhatsApp, phone contacts, or government systems are connected.</p>
+</section>
+
+<section class="panel">
+<h3>⏰ My reminders</h3>
+<ul class="list" id="remList"></ul>
+<div class="actions"><button class="secondary" id="remClear">Delete all</button></div>
+</section>
+
+<section class="panel">
+<h3>📄 Government message</h3>
+<p class="small">Paste a message you received, then say or type: "Explain this government message".</p>
+<textarea id="govText" placeholder="Paste a government SMS or notice here"></textarea>
+<div class="actions">
+<button class="primary" id="govExplain">Explain this message</button>
+<button class="secondary" id="govSample">Load sample message</button>
+</div>
+</section>
+
+<section class="panel">
+<h3>📞 My contacts</h3>
+<p class="small">These are DEMO numbers. Replace them with real family numbers.</p>
+<ul class="list" id="contactList"></ul>
+<div class="row">
+<input id="cName" placeholder="Name (e.g. Ravi)">
+<input id="cNumber" placeholder="Phone (e.g. 9876543210)" inputmode="tel">
+<select id="cRel">
+<option value="son">Son</option><option value="daughter">Daughter</option><option value="mother">Mother</option>
+<option value="father">Father</option><option value="doctor">Doctor</option><option value="other">Other</option>
+</select>
+<button class="primary" id="cAdd">Add</button>
+</div>
+</section>
+<footer>PhoneSaathi AI · Hackathon MVP · Telugu • Hindi • English</footer>
+</main>
+<script>
+'use strict';
+/* =====================================================================
+   PhoneSaathi AI - MVP logic
+   Sections:
+   1. Page elements + small helpers
+   2. Text in 3 languages
+   3. Speech output (text-to-speech)
+   4. Understanding commands (intent detection)
+   5. Reminders
+   6. Phone call preparation
+   7. Government message explainer
+   8. Voice input (microphone)
+   9. Buttons + start-up
+   ===================================================================== */
+
+/* ---------- 1. Page elements + helpers ---------- */
+const $ = id => document.getElementById(id);
+const langEl = $('language'), mic = $('mic'), transcript = $('transcript'), response = $('response');
+const typed = $('typed'), actionsEl = $('actions'), voiceNote = $('voiceNote'), govText = $('govText');
+const lang = () => langEl.value;
+const escapeRe = s => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+
+// Save/load in the browser. try/catch so the app still works if storage is blocked.
+function load(key, fallback) { try { const v = JSON.parse(localStorage.getItem(key)); return v == null ? fallback : v; } catch (e) { return fallback; } }
+function save(key, val) { try { localStorage.setItem(key, JSON.stringify(val)); } catch (e) {} }
+
+/* ---------- 2. Text in 3 languages ---------- */
+const TEXT = {
+  'en-IN': {
+    ready: 'PhoneSaathi is ready. Tap the microphone and speak.',
+    listening: 'Listening…',
+    notheard: 'I could not hear that. Please try again.',
+    unknown: 'Sorry, I did not understand. You can say: remind me to drink water in 10 minutes, call my son, or explain this government message.',
+    micDenied: 'The microphone is blocked. Please allow microphone access in the browser.',
+    network: 'Voice recognition needs an internet connection. Please try again.',
+    defaultTask: 'your reminder', thisNumber: 'this number',
+    at: t => 'at ' + t,
+    remSet: (task, when) => `Done. I will remind you: ${task}, ${when}.`,
+    remNoTime: task => `I saved your reminder: ${task}. But I did not hear a time. Say for example: remind me in 10 minutes.`,
+    remDue: task => `Reminder: ${task}`,
+    noReminders: 'No reminders yet.', noTime: 'no time set',
+    callReady: (name, num) => `Ready to call ${name} on ${num}. Tap the green Call button to dial.`,
+    callWho: names => `Whom should I call? Say for example: call my son. Saved contacts: ${names}.`,
+    callBtn: name => `📞 Call ${name}`,
+    govEmpty: 'Please paste a message in the Government message box first, or tap Load sample message.',
+    govTitle: 'Here is what I found in this message:',
+    amount: a => `Amount mentioned: ₹${a}.`,
+    date: d => `Date or deadline mentioned: ${d}.`,
+    linkOk: l => `The link ${l} looks like a government website (.gov.in).`,
+    linkBad: l => `The link ${l} is NOT a .gov.in website. Do not open it unless you are sure.`,
+    otp: 'Never share your OTP, PIN or password with anyone, even if they say they are from the government.',
+    urgent: 'The message sounds urgent. Scammers often do this. Check with the official office before acting.',
+    none: 'I could not find a date, amount or link. Please read it carefully or ask a family member.',
+    tip: 'Tip: before you act, check the official website or ask someone in your family.'
+  },
+  'hi-IN': {
+    ready: 'PhoneSaathi तैयार है। माइक्रोफ़ोन दबाकर बोलें।',
+    listening: 'मैं सुन रहा हूँ…',
+    notheard: 'आवाज़ समझ नहीं आई। कृपया फिर से बोलें।',
+    unknown: 'माफ़ कीजिए, मैं समझ नहीं पाया। आप कह सकते हैं: "10 मिनट में पानी पीने की याद दिलाओ", "बेटे को कॉल करो", या "सरकारी संदेश समझाओ"।',
+    micDenied: 'माइक्रोफ़ोन बंद है। कृपया ब्राउज़र में माइक्रोफ़ोन की अनुमति दें।',
+    network: 'आवाज़ पहचानने के लिए इंटरनेट चाहिए। कृपया फिर से कोशिश करें।',
+    defaultTask: 'आपका रिमाइंडर', thisNumber: 'इस नंबर',
+    at: t => t + ' पर',
+    remSet: (task, when) => `ठीक है। मैं आपको याद दिलाऊँगा: ${task}, ${when}।`,
+    remNoTime: task => `मैंने आपका रिमाइंडर सेव कर लिया: ${task}। पर समय नहीं सुना। जैसे कहें: 10 मिनट में याद दिलाओ।`,
+    remDue: task => `याद दिलाना: ${task}`,
+    noReminders: 'अभी कोई रिमाइंडर नहीं है।', noTime: 'समय तय नहीं',
+    callReady: (name, num) => `${name} को ${num} पर कॉल करने के लिए तैयार हूँ। कॉल करने के लिए हरा कॉल बटन दबाएँ।`,
+    callWho: names => `किसे कॉल करूँ? जैसे कहें: बेटे को कॉल करो। सेव किए गए नाम: ${names}।`,
+    callBtn: name => `📞 ${name} को कॉल करें`,
+    govEmpty: 'कृपया पहले सरकारी संदेश वाले बॉक्स में संदेश चिपकाएँ, या सैंपल संदेश दबाएँ।',
+    govTitle: 'इस संदेश में मुझे यह मिला:',
+    amount: a => `राशि: ₹${a}।`,
+    date: d => `तारीख या अंतिम तिथि: ${d}।`,
+    linkOk: l => `लिंक ${l} सरकारी वेबसाइट (.gov.in) जैसा दिखता है।`,
+    linkBad: l => `लिंक ${l} .gov.in वाला नहीं है। पक्का न हो तो न खोलें।`,
+    otp: 'अपना OTP, PIN या पासवर्ड किसी को न बताएँ, भले ही वह खुद को सरकारी अधिकारी कहे।',
+    urgent: 'संदेश जल्दबाज़ी वाला लगता है। ठग अक्सर ऐसा करते हैं। कुछ करने से पहले आधिकारिक कार्यालय से जाँच लें।',
+    none: 'मुझे इसमें तारीख, राशि या लिंक नहीं मिला। कृपया ध्यान से पढ़ें या परिवार से पूछें।',
+    tip: 'सलाह: कुछ भी करने से पहले आधिकारिक वेबसाइट पर जाँचें या घर में किसी से पूछें।'
+  },
+  'te-IN': {
+    ready: 'PhoneSaathi సిద్ధంగా ఉంది. మైక్ నొక్కి మాట్లాడండి.',
+    listening: 'వింటున్నాను…',
+    notheard: 'మీ మాట వినిపించలేదు. మళ్లీ ప్రయత్నించండి.',
+    unknown: 'క్షమించండి, నాకు అర్థం కాలేదు. ఇలా చెప్పండి: "10 నిమిషాల్లో నీళ్లు తాగమని గుర్తు చేయి", "కొడుకుకు కాల్ చేయి", లేదా "ప్రభుత్వ సందేశం వివరించు".',
+    micDenied: 'మైక్రోఫోన్ బ్లాక్ అయ్యింది. దయచేసి బ్రౌజర్‌లో మైక్ అనుమతి ఇవ్వండి.',
+    network: 'వాయిస్ గుర్తింపునకు ఇంటర్నెట్ కావాలి. మళ్లీ ప్రయత్నించండి.',
+    defaultTask: 'మీ రిమైండర్', thisNumber: 'ఈ నంబర్',
+    at: t => t + ' కి',
+    remSet: (task, when) => `సరే. నేను మీకు గుర్తు చేస్తాను: ${task}, ${when}.`,
+    remNoTime: task => `మీ రిమైండర్ సేవ్ చేశాను: ${task}. కానీ సమయం వినిపించలేదు. ఉదాహరణకు చెప్పండి: 10 నిమిషాల్లో గుర్తు చేయి.`,
+    remDue: task => `గుర్తు చేస్తున్నాను: ${task}`,
+    noReminders: 'ఇంకా రిమైండర్లు లేవు.', noTime: 'సమయం లేదు',
+    callReady: (name, num) => `${name} కి ${num} నంబర్‌కు కాల్ చేయడానికి సిద్ధంగా ఉంది. కాల్ చేయడానికి ఆకుపచ్చ కాల్ బటన్ నొక్కండి.`,
+    callWho: names => `ఎవరికి కాల్ చేయాలి? ఉదాహరణకు: కొడుకుకు కాల్ చేయి. సేవ్ చేసిన పేర్లు: ${names}.`,
+    callBtn: name => `📞 ${name} కి కాల్ చేయండి`,
+    govEmpty: 'దయచేసి ముందు ప్రభుత్వ సందేశం బాక్స్‌లో సందేశాన్ని పేస్ట్ చేయండి, లేదా శాంపిల్ సందేశం నొక్కండి.',
+    govTitle: 'ఈ సందేశంలో నాకు కనిపించినవి:',
+    amount: a => `మొత్తం: ₹${a}.`,
+    date: d => `తేదీ లేదా చివరి తేదీ: ${d}.`,
+    linkOk: l => `లింక్ ${l} ప్రభుత్వ వెబ్‌సైట్ (.gov.in) లా కనిపిస్తోంది.`,
+    linkBad: l => `లింక్ ${l} .gov.in కాదు. ఖచ్చితంగా తెలియకపోతే తెరవకండి.`,
+    otp: 'మీ OTP, PIN లేదా పాస్‌వర్డ్ ఎవరికీ చెప్పకండి, వారు ప్రభుత్వ అధికారి అని చెప్పినా సరే.',
+    urgent: 'ఈ సందేశం తొందర పెడుతున్నట్లు ఉంది. మోసగాళ్లు తరచూ ఇలా చేస్తారు. ఏదైనా చేసే ముందు అధికారిక కార్యాలయంతో సరిచూసుకోండి.',
+    none: 'ఇందులో తేదీ, మొత్తం లేదా లింక్ కనిపించలేదు. దయచేసి జాగ్రత్తగా చదవండి లేదా కుటుంబ సభ్యులను అడగండి.',
+    tip: 'సలహా: ఏదైనా చేసే ముందు అధికారిక వెబ్‌సైట్‌లో చూడండి లేదా ఇంట్లో వాళ్లను అడగండి.'
+  }
+};
+const T = () => TEXT[lang()];
+
+// Demo commands shown as tap-able buttons (so a demo never depends on the microphone)
+const DEMOS = [
+  { icon: '⏰', cmd: { 'en-IN': 'Remind me to drink water in 10 seconds', 'hi-IN': '10 सेकंड में पानी पीने की याद दिलाओ', 'te-IN': '10 సెకన్లలో నీళ్లు తాగమని గుర్తు చేయి' } },
+  { icon: '📞', cmd: { 'en-IN': 'Call my son', 'hi-IN': 'मेरे बेटे को कॉल करो', 'te-IN': 'కొడుకుకు కాల్ చేయి' } },
+  { icon: '📄', cmd: { 'en-IN': 'Explain this government message', 'hi-IN': 'सरकारी संदेश समझाओ', 'te-IN': 'ప్రభుత్వ సందేశం వివరించు' } }
+];
+function renderDemos() {
+  const grid = $('demoGrid'); grid.textContent = '';
+  DEMOS.forEach(d => {
+    const b = document.createElement('button');
+    b.className = 'feature'; b.textContent = d.icon + ' ' + d.cmd[lang()];
+    b.addEventListener('click', () => { typed.value = d.cmd[lang()]; transcript.textContent = typed.value; runCommand(typed.value); });
+    grid.appendChild(b);
+  });
+}
+
+/* ---------- 3. Speech output (text-to-speech) ---------- */
+let voices = [], lastSpoken = '';
+function loadVoices() { if ('speechSynthesis' in window) { voices = speechSynthesis.getVoices(); updateVoiceNote(); } }
+if ('speechSynthesis' in window) { loadVoices(); speechSynthesis.onvoiceschanged = loadVoices; }
+
+function pickVoice(l) {
+  const full = l.toLowerCase(), base = full.slice(0, 2);
+  const norm = v => v.lang.toLowerCase().replace('_', '-');
+  return voices.find(v => norm(v) === full) || voices.find(v => norm(v).startsWith(base));
+}
+function updateVoiceNote() {
+  if (!('speechSynthesis' in window)) { voiceNote.textContent = 'This browser cannot speak. Answers will show as text only.'; return; }
+  if (voices.length && !pickVoice(lang())) {
+    voiceNote.textContent = 'No voice for this language was found on this device, so spoken audio may not play. Text is always shown. Install this language\'s voice in your device settings.';
+  } else voiceNote.textContent = '';
+}
+// Make text easier for the voice to read aloud
+function toSpoken(text, l) {
+  const rupees = { 'en-IN': ' rupees', 'hi-IN': ' रुपये', 'te-IN': ' రూపాయలు' }[l];
+  return text.replace(/₹\s?(\d[\d,]*(?:\.\d+)?)/g, '$1' + rupees).replace(/[📞⏰📄🔊✅]/g, '');
+}
+function speak(text, l) {
+  l = l || lang();
+  lastSpoken = text;
+  if (!('speechSynthesis' in window)) return;
+  speechSynthesis.cancel();
+  const voice = pickVoice(l);
+  // Split into short sentences: long text can be cut off by some browsers
+  const parts = toSpoken(text, l).match(/[^.!?।\n]+[.!?।]?/g) || [];
+  parts.map(p => p.trim()).filter(Boolean).forEach(p => {
+    const u = new SpeechSynthesisUtterance(p);
+    u.lang = l; if (voice) u.voice = voice; u.rate = 0.9;
+    speechSynthesis.speak(u);
+  });
+}
+// Show text AND speak it
+function say(text) { response.textContent = text; speak(text); }
+
+/* ---------- 4. Understanding commands ---------- */
+// Keywords in English, Hindi, Telugu. ASCII words use \b so "ring" does not match "bring".
+const INTENT = {
+  reminder: /\b(?:remind\w*|alarm|remember)\b|याद|रिमाइंडर|अलार्म|గుర్తు|రిమైండర్|అలారం/i,
+  call: /\b(?:call|dial|ring up|phone (?:my|him|her|the|dr|doctor))\b|कॉल|फोन|फ़ोन|डायल|కాల్|ఫోన్|డయల్/i,
+  gov: /\b(?:government|govt|message|sms|notice|scheme|explain|letter)\b|सरकारी|संदेश|मैसेज|नोटिस|योजना|समझा|ప్రభుత్వ|సందేశం|మెసేజ్|నోటీసు|పథకం|వివరించ/i
+};
+// Order matters: "remind me to call my son" is a reminder, not a call.
+function detectIntent(text) {
+  if (INTENT.reminder.test(text)) return 'reminder';
+  if (INTENT.call.test(text)) return 'call';
+  if (INTENT.gov.test(text)) return 'gov';
+  return null;
+}
+function runCommand(raw) {
+  raw = (raw || '').trim();
+  actionsEl.textContent = '';
+  if (!raw) { say(T().notheard); return; }
+  const intent = detectIntent(raw);
+  if (intent === 'reminder') handleReminder(raw);
+  else if (intent === 'call') handleCall(raw);
+  else if (intent === 'gov') handleGov();
+  else say(T().unknown);
+}
+
+/* ---------- 5. Reminders ---------- */
+// Number words so "ten minutes", "दस मिनट", "పది నిమిషాల్లో" also work (digits work too)
+const NUMS = { one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10, eleven: 11, twelve: 12, fifteen: 15, twenty: 20, thirty: 30,
+  'एक': 1, 'दो': 2, 'तीन': 3, 'चार': 4, 'पाँच': 5, 'पांच': 5, 'छह': 6, 'सात': 7, 'आठ': 8, 'नौ': 9, 'दस': 10, 'ग्यारह': 11, 'बारह': 12, 'पंद्रह': 15, 'बीस': 20, 'तीस': 30,
+  'ఒకటి': 1, 'ఒక': 1, 'రెండు': 2, 'మూడు': 3, 'నాలుగు': 4, 'ఐదు': 5, 'ఆరు': 6, 'ఏడు': 7, 'ఎనిమిది': 8, 'తొమ్మిది': 9, 'పది': 10, 'పదకొండు': 11, 'పన్నెండు': 12, 'పదిహేను': 15, 'ఇరవై': 20, 'ముప్పై': 30 };
+const NUMALT = '\\d{1,3}|' + Object.keys(NUMS).sort((a, b) => b.length - a.length).join('|');
+const toNum = s => /^\d+$/.test(s) ? parseInt(s, 10) : (NUMS[s] || 0);
+
+// "in 10 minutes", "10 मिनट में", "10 నిమిషాల్లో"
+const REL = new RegExp(`(?:^|\\s)((?:(?:in|after)\\s+)?(${NUMALT})\\s*(seconds?|secs?|minutes?|mins?|hours?|hrs?|सेकंड|सेकण्ड|मिनट|घंटे|घण्टे|घंटा|సెకన\\S*|నిమిష\\S*|గంటల్లో|గంటలలో|గంటలో))(?![a-z])`, 'i');
+// "at 5 pm", "5 बजे", "5 గంటలకు", "17:30", "at 6"
+const ABS1 = new RegExp(`(?:^|\\s)((?:at\\s+)?(${NUMALT})(?::(\\d{2}))?\\s*(am|pm|a\\.m\\.|p\\.m\\.|बजे|గంటలకు|గంటకు|o'clock))(?![a-z])`, 'i');
+const ABS2 = /(?:^|\s)((?:at\s+)?(\d{1,2}):(\d{2}))/i;
+const ABS3 = /(?:^|\s)(at\s+(\d{1,2}))(?![\d:])/i;
+const TOMORROW = /tomorrow|(?:^|\s)कल(?:\s|$)|రేపు/;
+const AM_WORDS = /morning|सुबह|सवेरे|ఉదయం/, PM_WORDS = /afternoon|evening|night|दोपहर|शाम|रात|మధ్యాహ్నం|సాయంత్రం|రాత్రి/;
+
+// Returns { date, phrases } or null if no time was heard
+function parseWhen(text) {
+  const t = text.toLowerCase(), now = new Date();
+  let m;
+  if ((m = t.match(REL))) {
+    const n = toNum(m[2]), u = m[3];
+    if (n > 0) {
+      const ms = /sec|सेकं|सेकण|సెకన/.test(u) ? n * 1000 : /min|मिनट|నిమిష/.test(u) ? n * 60000 : n * 3600000;
+      return { date: new Date(now.getTime() + ms), phrases: [m[1]] };
+    }
+  }
+  let h = null, min = 0, suf = '', phrase = '';
+  if ((m = t.match(ABS1))) { h = toNum(m[2]); min = m[3] ? +m[3] : 0; suf = m[4].replace(/\./g, ''); phrase = m[1]; }
+  else if ((m = t.match(ABS2))) { h = +m[2]; min = +m[3]; phrase = m[1]; }
+  else if ((m = t.match(ABS3))) { h = +m[2]; phrase = m[1]; }
+  const tomorrow = TOMORROW.test(t);
+  if (h === null) { if (!tomorrow) return null; h = 9; min = 0; suf = 'am'; }   // "tomorrow" alone -> 9:00 AM
+  if (h > 23 || min > 59) return null;
+  const isPM = suf === 'pm' || (suf !== 'am' && PM_WORDS.test(t));
+  const isAM = suf === 'am' || (suf !== 'pm' && !isPM && AM_WORDS.test(t));
+  if (isPM && h < 12) h += 12;
+  if (isAM && h === 12) h = 0;
+  const ambiguous = !isPM && !isAM && h >= 1 && h <= 12;
+  let d = new Date(now); d.setHours(h, min, 0, 0);
+  if (tomorrow) d.setDate(d.getDate() + 1);
+  else if (d <= now) {
+    const d2 = new Date(d); d2.setHours(h + 12);
+    if (ambiguous && h < 12 && d2 > now) d = d2; else d.setDate(d.getDate() + 1);
+  }
+  return { date: d, phrases: phrase ? [phrase] : [] };
+}
+
+// Words that are part of the command, not of the task itself
+const FILL_TOKENS = new Set(['please', 'reminder', 'alarm', 'tomorrow', 'today',
+  'याद', 'दिलाओ', 'दिलाना', 'दिलाइए', 'दिला', 'दिलाएं', 'रिमाइंडर', 'अलार्म', 'कृपया', 'मुझे', 'कल', 'आज', 'बाद', 'में', 'लगाओ',
+  'గుర్తు', 'చేయి', 'చేయండి', 'గుర్తుచేయి', 'రిమైండర్', 'అలారం', 'దయచేసి', 'నాకు', 'రేపు', 'ఈరోజు', 'సెట్']);
+function extractTask(raw, phrases) {
+  let s = ' ' + raw + ' ';
+  phrases.forEach(p => { s = s.replace(new RegExp(escapeRe(p), 'i'), ' '); });
+  s = s.replace(/याद\s*दिला\s*दो/g, ' ')
+       .replace(/\b(?:set (?:a |an )?(?:reminder|alarm)(?: to| for| about)?|remind me(?: to| about| that)?|remember to)\b/gi, ' ')
+       .replace(/\b(?:in the (?:morning|evening|afternoon)|at night|tonight)\b/gi, ' ');
+  let out = s.split(/\s+/).filter(w => w && !FILL_TOKENS.has(w.toLowerCase())).join(' ');
+  out = out.replace(/^[\s,.\-।]+|[\s,.\-।]+$/g, '').replace(/^to\s+/i, '').replace(/\s+(?:की|का|के)$/, '');
+  return out;
+}
+
+let reminders = load('ps_reminders', []);
+const timers = {};
+const saveReminders = () => save('ps_reminders', reminders);
+
+function whenLabel(date) {
+  const now = new Date(), same = date.toDateString() === now.toDateString();
+  const opts = { hour: 'numeric', minute: '2-digit' };
+  if (date - now < 300000) opts.second = '2-digit';        // show seconds for very short reminders
+  let s = date.toLocaleTimeString(lang(), opts);
+  if (!same) s = date.toLocaleDateString(lang(), { day: 'numeric', month: 'short' }) + ' ' + s;
+  return T().at(s);
+}
+function handleReminder(raw) {
+  const w = parseWhen(raw);
+  const task = extractTask(raw, w ? w.phrases : []) || T().defaultTask;
+  const r = { id: uid(), task, due: w ? w.date.getTime() : null, lang: lang(), done: false };
+  reminders.push(r); saveReminders(); scheduleReminder(r); renderReminders();
+  say(w ? T().remSet(task, whenLabel(w.date)) : T().remNoTime(task));
+}
+function scheduleReminder(r) {
+  if (r.done || !r.due) return;
+  const ms = r.due - Date.now();
+  clearTimeout(timers[r.id]);
+  if (ms <= 0) { fireReminder(r.id); return; }
+  if (ms > 2147000000) return;                              // too far for setTimeout (about 24 days)
+  timers[r.id] = setTimeout(() => fireReminder(r.id), ms);
+}
+function fireReminder(id) {
+  const r = reminders.find(x => x.id === id);
+  if (!r || r.done) return;
+  r.done = true; saveReminders(); renderReminders();
+  const msg = TEXT[r.lang].remDue(r.task);
+  $('alertText').textContent = '⏰ ' + msg;
+  $('alertBox').classList.add('show');
+  speak(msg, r.lang);
+}
+function renderReminders() {
+  const ul = $('remList'); ul.textContent = '';
+  if (!reminders.length) { const li = document.createElement('li'); li.textContent = T().noReminders; ul.appendChild(li); return; }
+  reminders.forEach(r => {
+    const li = document.createElement('li'); if (r.done) li.className = 'done';
+    const when = r.due ? new Date(r.due).toLocaleString(r.lang, { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' }) : TEXT[r.lang].noTime;
+    const span = document.createElement('span'); span.textContent = (r.done ? '✅ ' : '⏰ ') + r.task + ' — ' + when;
+    const del = document.createElement('button'); del.textContent = '✕'; del.setAttribute('aria-label', 'Delete reminder');
+    del.addEventListener('click', () => { clearTimeout(timers[r.id]); reminders = reminders.filter(x => x.id !== r.id); saveReminders(); renderReminders(); });
+    li.append(span, del); ul.appendChild(li);
+  });
+}
+
+/* ---------- 6. Phone call preparation ---------- */
+const DEFAULT_CONTACTS = [
+  { name: 'Ravi (Son)', number: '+91 90000 00001', rel: 'son' },
+  { name: 'Lakshmi (Daughter)', number: '+91 90000 00002', rel: 'daughter' },
+  { name: 'Dr. Rao', number: '+91 90000 00003', rel: 'doctor' }
+];
+const REL_WORDS = {
+  son: ['son', 'बेटा', 'बेटे', 'కొడుకు', 'అబ్బాయి'],
+  daughter: ['daughter', 'बेटी', 'కూతురు', 'కుమార్తె'],
+  mother: ['mother', 'mom', 'mummy', 'माँ', 'मां', 'मम्मी', 'అమ్మ'],
+  father: ['father', 'dad', 'papa', 'पापा', 'पिता', 'నాన్న'],
+  doctor: ['doctor', 'dr', 'डॉक्टर', 'डाक्टर', 'డాక్టర్']
+};
+let contacts = load('ps_contacts', DEFAULT_CONTACTS);
+const saveContacts = () => save('ps_contacts', contacts);
+
+// ASCII words must match whole words; Hindi/Telugu words can match anywhere (they carry suffixes)
+const hasWord = (text, w) => /^[a-z0-9]+$/.test(w) ? new RegExp('\\b' + w + '\\b').test(text) : text.includes(w);
+function findContact(text) {
+  const t = text.toLowerCase();
+  return contacts.find(c => {
+    const names = c.name.toLowerCase().split(/[\s()]+/).map(x => x.replace(/\./g, '')).filter(x => x.length >= 3);
+    return names.some(n => hasWord(t, n)) || (REL_WORDS[c.rel] || []).some(w => hasWord(t, w));
+  });
+}
+function handleCall(raw) {
+  let number = null, label = null;
+  const c = findContact(raw);
+  if (c) { number = c.number; label = c.name; }
+  else {                                                     // "call 9876543210"
+    const m = raw.match(/\+?\d[\d\s-]{8,}\d/);
+    if (m) { number = m[0].trim(); label = T().thisNumber; }
+  }
+  if (!number) { say(T().callWho(contacts.map(x => x.name).join(', '))); return; }
+  say(T().callReady(label, number));
+  // Safety: we never dial automatically. The person must tap the button.
+  const a = document.createElement('a');
+  a.className = 'callbtn'; a.href = 'tel:' + number.replace(/[^\d+]/g, ''); a.textContent = T().callBtn(label);
+  actionsEl.appendChild(a);
+}
+function renderContacts() {
+  const ul = $('contactList'); ul.textContent = '';
+  contacts.forEach((c, i) => {
+    const li = document.createElement('li');
+    const span = document.createElement('span'); span.textContent = c.name + ' — ' + c.number;
+    const del = document.createElement('button'); del.textContent = '✕'; del.setAttribute('aria-label', 'Delete contact');
+    del.addEventListener('click', () => { contacts.splice(i, 1); saveContacts(); renderContacts(); });
+    li.append(span, del); ul.appendChild(li);
+  });
+}
+
+/* ---------- 7. Government message explainer ---------- */
+const SAMPLE = {
+  'en-IN': { text: 'Civil Supplies Dept: Your Ration Card e-KYC is pending. Complete it before 30-11-2026 at your nearest ration shop or on ration.example.gov.in, otherwise your ration may stop. Do not share OTP with anyone.',
+    summary: 'This message is from the Civil Supplies Department. Your ration card e-KYC (identity check) is pending. Please complete it before 30 November 2026, at your nearest ration shop or on the official website. If you do not, your ration may stop.' },
+  'hi-IN': { text: 'नागरिक आपूर्ति विभाग: आपके राशन कार्ड का e-KYC बाकी है। 30-11-2026 से पहले नज़दीकी राशन दुकान या ration.example.gov.in पर पूरा करें, वरना राशन बंद हो सकता है। किसी को OTP न बताएँ।',
+    summary: 'यह संदेश नागरिक आपूर्ति विभाग का है। आपके राशन कार्ड का e-KYC (पहचान जाँच) बाकी है। कृपया 30 नवंबर 2026 से पहले अपनी नज़दीकी राशन दुकान या आधिकारिक वेबसाइट पर इसे पूरा करें। नहीं करने पर आपका राशन बंद हो सकता है।' },
+  'te-IN': { text: 'పౌర సరఫరాల శాఖ: మీ రేషన్ కార్డ్ e-KYC పెండింగ్‌లో ఉంది. 30-11-2026 లోపు దగ్గరలోని రేషన్ షాపులో లేదా ration.example.gov.in లో పూర్తి చేయండి, లేకపోతే రేషన్ ఆగిపోవచ్చు. ఎవరికీ OTP చెప్పకండి.',
+    summary: 'ఈ సందేశం పౌర సరఫరాల శాఖ నుండి వచ్చింది. మీ రేషన్ కార్డ్ e-KYC (గుర్తింపు తనిఖీ) ఇంకా పూర్తి కాలేదు. దయచేసి 2026 నవంబర్ 30 లోపు మీ దగ్గరి రేషన్ షాపులో లేదా అధికారిక వెబ్‌సైట్‌లో పూర్తి చేయండి. లేకపోతే మీ రేషన్ ఆగిపోవచ్చు.' }
+};
+// Finds dates, amounts, links and scam warning signs in ANY pasted message (no AI server needed)
+function analyze(text) {
+  const all = (re, f) => [...text.matchAll(re)].map(f);
+  return {
+    dates: all(/\b\d{1,2}[-\/.]\d{1,2}[-\/.]\d{2,4}\b/g, m => m[0]),
+    amounts: all(/(?:rs\.?|inr|₹)\s?(\d[\d,]*(?:\.\d+)?)/gi, m => m[1]),
+    links: all(/\b(?:https?:\/\/)?(?:[a-z0-9-]+\.)+(?:gov\.in|nic\.in|in|com|org|net|co|ly|xyz|info|link|top|app)\b(?:\/\S*)?/gi, m => m[0].replace(/[.,;]+$/, '')),
+    otp: /\b(?:otp|pin|password|cvv)\b|ओटीपी|पासवर्ड|ఓటీపీ|పాస్‌వర్డ్/i.test(text),
+    urgent: /\b(?:urgent|immediately|blocked|suspend\w*|expire\w*|last chance|click|lottery|won|prize|verify now)\b|तुरंत|जल्दी|ब्लॉक|लॉटरी|వెంటనే|బ్లాక్|లాటరీ/i.test(text)
+  };
+}
+const isOfficialLink = l => /(?:^|\.)(?:gov|nic)\.in$/i.test(l.replace(/^https?:\/\//i, '').split('/')[0]);
+function handleGov() {
+  const text = govText.value.trim();
+  if (!text) { say(T().govEmpty); return; }
+  const a = analyze(text), t = T(), lines = [t.govTitle];
+  const known = Object.keys(SAMPLE).some(k => SAMPLE[k].text === text);
+  if (known) lines.push(SAMPLE[lang()].summary);               // nice human summary for the sample message
+  a.dates.forEach(d => lines.push(t.date(d)));
+  a.amounts.forEach(x => lines.push(t.amount(x)));
+  a.links.forEach(l => lines.push(isOfficialLink(l) ? t.linkOk(l) : t.linkBad(l)));
+  if (!known && !a.dates.length && !a.amounts.length && !a.links.length) lines.push(t.none);
+  if (a.otp) lines.push(t.otp);
+  if (a.urgent) lines.push(t.urgent);
+  lines.push(t.tip);
+  say(lines.join('\n'));
+}
+
+/* ---------- 8. Voice input (microphone) ---------- */
+let recognition = null, listening = false;
+const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+function micIdle() { listening = false; mic.classList.remove('listening'); mic.textContent = '🎤'; }
+if (SR) {
+  recognition = new SR(); recognition.continuous = false; recognition.interimResults = false; recognition.maxAlternatives = 1;
+  recognition.onresult = e => { const text = e.results[0][0].transcript; transcript.textContent = text; typed.value = text; runCommand(text); };
+  recognition.onerror = e => {
+    transcript.textContent = 'Voice error: ' + e.error;
+    if (e.error === 'not-allowed' || e.error === 'service-not-allowed') say(T().micDenied);
+    else if (e.error === 'network') say(T().network);
+    else say(T().notheard);
+  };
+  recognition.onend = micIdle;
+} else {
+  mic.disabled = true; mic.title = 'Speech recognition is not supported in this browser. Try Chrome or use the text box.';
+  $('micHint').textContent = 'Voice recognition may not be supported here. Use Chrome or type a command.';
+}
+mic.addEventListener('click', () => {
+  if (!recognition) { alert('Please open this demo in Google Chrome.'); return; }
+  if (listening) { recognition.stop(); return; }
+  if ('speechSynthesis' in window) speechSynthesis.cancel();   // stop talking so the mic does not hear us
+  recognition.lang = lang();                                    // te-IN, hi-IN or en-IN
+  listening = true; mic.classList.add('listening'); mic.textContent = '⏹'; transcript.textContent = T().listening;
+  try { recognition.start(); } catch (e) { micIdle(); }
+});
+
+/* ---------- 9. Buttons + start-up ---------- */
+$('run').addEventListener('click', () => { transcript.textContent = typed.value; runCommand(typed.value); });
+typed.addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); transcript.textContent = typed.value; runCommand(typed.value); } });
+$('clear').addEventListener('click', () => { typed.value = ''; transcript.textContent = 'Your spoken words will appear here.'; response.textContent = T().ready; actionsEl.textContent = ''; });
+$('repeat').addEventListener('click', () => { if (lastSpoken) speak(lastSpoken); });
+$('alertOk').addEventListener('click', () => { $('alertBox').classList.remove('show'); if ('speechSynthesis' in window) speechSynthesis.cancel(); });
+$('remClear').addEventListener('click', () => { Object.values(timers).forEach(clearTimeout); reminders = []; saveReminders(); renderReminders(); });
+$('govExplain').addEventListener('click', () => { transcript.textContent = '📄'; actionsEl.textContent = ''; handleGov(); });
+$('govSample').addEventListener('click', () => { govText.value = SAMPLE[lang()].text; });
+$('cAdd').addEventListener('click', () => {
+  const name = $('cName').value.trim(), number = $('cNumber').value.trim();
+  if (!name || number.replace(/\D/g, '').length < 10) { alert('Please enter a name and a 10-digit phone number.'); return; }
+  contacts.push({ name, number, rel: $('cRel').value }); saveContacts(); renderContacts();
+  $('cName').value = ''; $('cNumber').value = '';
+});
+langEl.addEventListener('change', () => {
+  if ('speechSynthesis' in window) speechSynthesis.cancel();
+  response.textContent = T().ready; actionsEl.textContent = '';
+  updateVoiceNote(); renderDemos();
+});
+
+govText.value = SAMPLE[lang()].text;
+response.textContent = T().ready;
+renderDemos(); renderReminders(); renderContacts(); updateVoiceNote();
+reminders.forEach(scheduleReminder);                            // re-arm saved reminders after a page reload
+</script>
+</body>
+</html>
